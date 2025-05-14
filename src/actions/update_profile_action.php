@@ -5,19 +5,11 @@ if (session_status() == PHP_SESSION_NONE) {
 }
 
 // ORDEM CORRETA E COMPLETA DOS INCLUDES:
-// 1. Constantes (para BASE_URL, chaves de criptografia, etc.)
 require_once __DIR__ . '/../config/constants.php';
-
-// 2. Funções Utilitárias (para redirect(), e(), encrypt_data(), decrypt_data())
 require_once __DIR__ . '/../core/functions.php';
-
-// 3. Conexão com Banco de Dados (para $pdo)
 require_once __DIR__ . '/../config/database.php';
-
-// 4. Funções de Autenticação (para require_login(), $_SESSION['user_id'])
 require_once __DIR__ . '/../core/auth.php';
 
-// Agora podemos chamar require_login() que pode precisar de redirect()
 require_login();
 
 

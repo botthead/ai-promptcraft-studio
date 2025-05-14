@@ -9,6 +9,7 @@ require_once __DIR__ . '/../src/config/database.php';
 require_once __DIR__ . '/../src/templates/header.php'; // header.php já faz session_start() e define e()
 
 // LOG PARA VER A SESSÃO QUANDO generator.php CARREGA
+// Mantenha este log ativo durante a depuração, remova ou comente em produção.
 error_log("Sessão no início de generator.php (antes de qualquer lógica): " . print_r($_SESSION, true));
 
 $form_data = $_SESSION['form_data_generator'] ?? []; // Para repopular formulário em caso de erro de validação do gerador
@@ -26,10 +27,13 @@ try {
     }
 } catch (PDOException $e) {
     error_log("Erro ao verificar API Key do Gemini para user_id {$user_id}: " . $e->getMessage());
+    // Não impede a renderização da página, mas a funcionalidade da API pode não estar disponível como esperado
 }
 
 // Lógica para reutilizar prompt
-if (isset($_GET['reuse_prompt_id']) && empty($_SESSION['form_data_generator']) /* Só carrega se não houver dados de um erro anterior de submissão DESTE formulário*/) {
+// Só carrega se não houver dados de um erro anterior de submissão DESTE formulário,
+// para evitar sobrescrever dados de um formulário com erro se o usuário tentar reutilizar nesse meio tempo.
+if (isset($_GET['reuse_prompt_id']) && empty($_SESSION['form_data_generator'])) {
     $reuse_prompt_id = filter_var($_GET['reuse_prompt_id'], FILTER_VALIDATE_INT);
     if ($reuse_prompt_id) {
         try {
@@ -44,7 +48,8 @@ if (isset($_GET['reuse_prompt_id']) && empty($_SESSION['form_data_generator']) /
                 $input_params_reused = json_decode($prompt_to_reuse['input_parameters'], true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($input_params_reused)) {
                     $form_data = array_merge($form_data, $input_params_reused); // Mescla, reutilizados têm prioridade
-                     // Se o título não veio explicitamente do JSON de input_parameters, usa o título da tabela prompts
+                    
+                    // Se o título não veio explicitamente do JSON de input_parameters, usa o título da tabela prompts
                     if (empty($form_data['prompt_title']) && !empty($prompt_to_reuse['title'])) {
                         // Verifica se o título da tabela não é o placeholder genérico
                         if (strpos($prompt_to_reuse['title'], 'Prompt Sem Título - ') !== 0) {
@@ -66,15 +71,17 @@ if (isset($_GET['reuse_prompt_id']) && empty($_SESSION['form_data_generator']) /
     }
 }
 
-// Capturar o prompt gerado e os parâmetros da última geração (se vieram da action de gerar)
+// Capturar o prompt gerado e os parâmetros da última GERAÇÃO (se vieram da action de gerar)
+// para exibição e para o formulário de salvar.
 $generated_prompt_text_display = $_SESSION['generated_prompt_text'] ?? '';
 $last_input_parameters_for_save = $_SESSION['last_input_parameters'] ?? null;
 
-// Capturar resposta da API Gemini e erros da sessão
+// Capturar resposta da API Gemini e erros da sessão para exibição
 $gemini_api_response_display = $_SESSION['gemini_api_response'] ?? '';
 $gemini_api_error_display = $_SESSION['gemini_api_error'] ?? '';
 
-// Limpar da sessão APÓS capturar para exibição nesta requisição
+// Limpar da sessão IMEDIATAMENTE APÓS capturar para exibição nesta requisição,
+// para que não persistam para a próxima vez que a página for carregada sem uma nova ação.
 if (isset($_SESSION['gemini_api_response'])) unset($_SESSION['gemini_api_response']);
 if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
 
@@ -87,6 +94,7 @@ if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
     </header>
 
     <?php
+    // Exibição de mensagens de erro/sucesso do gerador (não da API Gemini, essas são tratadas abaixo)
     if (isset($_SESSION['error_message_generator'])) {
         echo '<div class="notice error" style="background-color: var(--pico-form-element-background-color); border-left-color: var(--pico-color-red); margin-bottom: 1rem; padding:0.75rem;"><p>' . e($_SESSION['error_message_generator']) . '</p></div>';
         unset($_SESSION['error_message_generator']);
@@ -117,7 +125,7 @@ if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
                    placeholder="Ex: Criar um roteiro para vídeo, gerar um email de marketing, resumir um texto"
                    value="<?php echo e($form_data['objective'] ?? ''); ?>">
             <?php if (isset($_SESSION['form_errors_generator']['objective'])): ?>
-                <small class="error-feedback" style="color: var(--pico-color-red-500);"><?php echo e($_SESSION['form_errors_generator']['objective']); ?></small><br>
+                <small class="error-feedback" style="color: var(--pico-color-red-500); display: block; margin-top: -0.5rem; margin-bottom: 0.5rem;"><?php echo e($_SESSION['form_errors_generator']['objective']); ?></small>
             <?php endif; ?>
         </label>
 
@@ -132,15 +140,15 @@ if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
                 Tom/Estilo:
                 <select id="tone_style" name="tone_style">
                     <option value="" <?php echo empty($form_data['tone_style']) ? 'selected' : ''; ?>>-- Selecione --</option>
-                    <option value="Formal" <?php echo ($form_data['tone_style'] ?? '') == 'Formal' ? 'selected' : ''; ?>>Formal</option>
-                    <option value="Informal" <?php echo ($form_data['tone_style'] ?? '') == 'Informal' ? 'selected' : ''; ?>>Informal</option>
-                    <option value="Amigável" <?php echo ($form_data['tone_style'] ?? '') == 'Amigável' ? 'selected' : ''; ?>>Amigável</option>
-                    <option value="Profissional" <?php echo ($form_data['tone_style'] ?? '') == 'Profissional' ? 'selected' : ''; ?>>Profissional</option>
-                    <option value="Técnico" <?php echo ($form_data['tone_style'] ?? '') == 'Técnico' ? 'selected' : ''; ?>>Técnico</option>
-                    <option value="Criativo" <?php echo ($form_data['tone_style'] ?? '') == 'Criativo' ? 'selected' : ''; ?>>Criativo</option>
-                    <option value="Persuasivo" <?php echo ($form_data['tone_style'] ?? '') == 'Persuasivo' ? 'selected' : ''; ?>>Persuasivo</option>
-                    <option value="Cômico" <?php echo ($form_data['tone_style'] ?? '') == 'Cômico' ? 'selected' : ''; ?>>Cômico</option>
-                    <option value="Urgente" <?php echo ($form_data['tone_style'] ?? '') == 'Urgente' ? 'selected' : ''; ?>>Urgente</option>
+                    <option value="Formal" <?php echo (($form_data['tone_style'] ?? '') === 'Formal') ? 'selected' : ''; ?>>Formal</option>
+                    <option value="Informal" <?php echo (($form_data['tone_style'] ?? '') === 'Informal') ? 'selected' : ''; ?>>Informal</option>
+                    <option value="Amigável" <?php echo (($form_data['tone_style'] ?? '') === 'Amigável') ? 'selected' : ''; ?>>Amigável</option>
+                    <option value="Profissional" <?php echo (($form_data['tone_style'] ?? '') === 'Profissional') ? 'selected' : ''; ?>>Profissional</option>
+                    <option value="Técnico" <?php echo (($form_data['tone_style'] ?? '') === 'Técnico') ? 'selected' : ''; ?>>Técnico</option>
+                    <option value="Criativo" <?php echo (($form_data['tone_style'] ?? '') === 'Criativo') ? 'selected' : ''; ?>>Criativo</option>
+                    <option value="Persuasivo" <?php echo (($form_data['tone_style'] ?? '') === 'Persuasivo') ? 'selected' : ''; ?>>Persuasivo</option>
+                    <option value="Cômico" <?php echo (($form_data['tone_style'] ?? '') === 'Cômico') ? 'selected' : ''; ?>>Cômico</option>
+                    <option value="Urgente" <?php echo (($form_data['tone_style'] ?? '') === 'Urgente') ? 'selected' : ''; ?>>Urgente</option>
                 </select>
             </label>
         </div>
@@ -156,14 +164,14 @@ if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
             Formato de Saída Desejado:
             <select id="output_format" name="output_format">
                 <option value="" <?php echo empty($form_data['output_format']) ? 'selected' : ''; ?>>-- Selecione --</option>
-                <option value="Parágrafos" <?php echo ($form_data['output_format'] ?? '') == 'Parágrafos' ? 'selected' : ''; ?>>Parágrafos</option>
-                <option value="Lista com marcadores" <?php echo ($form_data['output_format'] ?? '') == 'Lista com marcadores' ? 'selected' : ''; ?>>Lista com marcadores</option>
-                <option value="Lista numerada" <?php echo ($form_data['output_format'] ?? '') == 'Lista numerada' ? 'selected' : ''; ?>>Lista numerada</option>
-                <option value="Tabela" <?php echo ($form_data['output_format'] ?? '') == 'Tabela' ? 'selected' : ''; ?>>Tabela</option>
-                <option value="Bloco de código" <?php echo ($form_data['output_format'] ?? '') == 'Bloco de código' ? 'selected' : ''; ?>>Bloco de código</option>
-                <option value="Diálogo" <?php echo ($form_data['output_format'] ?? '') == 'Diálogo' ? 'selected' : ''; ?>>Diálogo</option>
-                <option value="Email" <?php echo ($form_data['output_format'] ?? '') == 'Email' ? 'selected' : ''; ?>>Email</option>
-                <option value="Roteiro" <?php echo ($form_data['output_format'] ?? '') == 'Roteiro' ? 'selected' : ''; ?>>Roteiro</option>
+                <option value="Parágrafos" <?php echo (($form_data['output_format'] ?? '') === 'Parágrafos') ? 'selected' : ''; ?>>Parágrafos</option>
+                <option value="Lista com marcadores" <?php echo (($form_data['output_format'] ?? '') === 'Lista com marcadores') ? 'selected' : ''; ?>>Lista com marcadores</option>
+                <option value="Lista numerada" <?php echo (($form_data['output_format'] ?? '') === 'Lista numerada') ? 'selected' : ''; ?>>Lista numerada</option>
+                <option value="Tabela" <?php echo (($form_data['output_format'] ?? '') === 'Tabela') ? 'selected' : ''; ?>>Tabela</option>
+                <option value="Bloco de código" <?php echo (($form_data['output_format'] ?? '') === 'Bloco de código') ? 'selected' : ''; ?>>Bloco de código</option>
+                <option value="Diálogo" <?php echo (($form_data['output_format'] ?? '') === 'Diálogo') ? 'selected' : ''; ?>>Diálogo</option>
+                <option value="Email" <?php echo (($form_data['output_format'] ?? '') === 'Email') ? 'selected' : ''; ?>>Email</option>
+                <option value="Roteiro" <?php echo (($form_data['output_format'] ?? '') === 'Roteiro') ? 'selected' : ''; ?>>Roteiro</option>
             </select>
         </label>
 
@@ -180,6 +188,7 @@ if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
 
     <hr>
 
+    <!-- Seção para exibir o prompt gerado e interações com API -->
     <section id="generated-prompt-interaction-section" style="margin-top: 2rem; <?php echo empty($generated_prompt_text_display) ? 'display: none;' : ''; ?>">
         <h3>Prompt Gerado:</h3>
         <article>
@@ -210,7 +219,7 @@ if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
         <!-- Área para exibir a resposta da API Gemini -->
         <div id="gemini-response-area" style="margin-top: 1.5rem;">
             <?php if (!empty($gemini_api_error_display)): ?>
-                <div class="notice error" style="background-color: var(--pico-form-element-background-color); border-left-color: var(--pico-color-red); padding:0.75rem;"><p><strong>Erro ao contatar Gemini:</strong> <?php echo e($gemini_api_error_display); ?></p></div>
+                <div class="notice error" style="background-color: var(--pico-form-element-background-color); border-left-color: var(--pico-color-red); padding:0.75rem; margin-bottom:1rem;"><p><strong>Erro ao contatar Gemini:</strong> <?php echo e($gemini_api_error_display); ?></p></div>
             <?php endif; ?>
             <?php if (!empty($gemini_api_response_display)): ?>
                 <h4>Resposta do Gemini:</h4>
@@ -237,22 +246,35 @@ if (isset($_SESSION['gemini_api_error'])) unset($_SESSION['gemini_api_error']);
 <script>
 function copyToClipboard(elementId) {
     const textToCopy = document.getElementById(elementId).innerText;
-    if (!textToCopy) {
-        alert('Nada para copiar.');
+    if (!textToCopy && elementId === 'generated-prompt-text-display') { // Adiciona verificação se o prompt está vazio
+        alert('Não há prompt gerado para copiar.');
+        return;
+    }
+    if (!textToCopy) { // Genérico para outros usos futuros
+         alert('Nada para copiar.');
         return;
     }
     navigator.clipboard.writeText(textToCopy).then(function() {
         alert('Texto copiado para a área de transferência!');
     }, function(err) {
         console.error('Erro ao copiar: ', err);
-        alert('Falha ao copiar. Verifique as permissões do navegador ou copie manually.');
+        alert('Falha ao copiar. Verifique as permissões do navegador ou copie manualmente.');
     });
 }
 
 const sendToGeminiBtn = document.getElementById('send-to-gemini-btn');
 if (sendToGeminiBtn) {
-    sendToGeminiBtn.addEventListener('click', function() {
-        const promptText = document.getElementById('generated-prompt-text-display').innerText;
+    sendToGeminiBtn.addEventListener('click', function(event) {
+        event.preventDefault(); // Prevenir qualquer comportamento padrão do botão se ele estiver dentro de outro form acidentalmente
+
+        const promptTextElement = document.getElementById('generated-prompt-text-display');
+        if (!promptTextElement) {
+            console.error("Elemento 'generated-prompt-text-display' não encontrado.");
+            alert('Erro interno: Não foi possível encontrar o texto do prompt.');
+            return;
+        }
+        const promptText = promptTextElement.innerText;
+        
         const spinner = document.getElementById('gemini-spinner');
         const responseArea = document.getElementById('gemini-response-area');
 
@@ -261,10 +283,11 @@ if (sendToGeminiBtn) {
             return;
         }
 
-        responseArea.innerHTML = ''; // Limpar respostas/erros anteriores
-        spinner.style.display = 'block';
-        sendToGeminiBtn.setAttribute('aria-busy', 'true');
-        sendToGeminiBtn.disabled = true;
+        if (spinner) spinner.style.display = 'block';
+        if (responseArea) responseArea.innerHTML = ''; // Limpar respostas/erros anteriores
+        
+        this.setAttribute('aria-busy', 'true'); // 'this' se refere ao botão clicado
+        this.disabled = true;
 
         const form = document.createElement('form');
         form.method = 'POST';
@@ -287,13 +310,20 @@ if (sendToGeminiBtn) {
 if (isset($_SESSION['form_data_generator'])) unset($_SESSION['form_data_generator']);
 if (isset($_SESSION['form_errors_generator'])) unset($_SESSION['form_errors_generator']);
 
-// Limpa o prompt gerado e os parâmetros da última GERAÇÃO se o usuário está apenas
+// Limpa o prompt gerado internamente e os parâmetros da última GERAÇÃO se o usuário está apenas
 // visitando a página (GET) e não vindo de uma ação de reutilização ou de uma submissão POST
-// que resultou na exibição destes dados. As respostas da API já foram limpas acima.
+// que resultou na exibição destes dados. As respostas da API já foram limpas acima no início do script.
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['reuse_prompt_id'])) {
-    if (isset($_SESSION['generated_prompt_text'])) unset($_SESSION['generated_prompt_text']);
+    // Somente limpa se não for uma reutilização, para permitir que o prompt reutilizado seja exibido.
+    // E somente se não for um POST (pois nesse caso, o 'generate_prompt_action' já lidou com a sessão).
+    // Esta lógica ajuda a não mostrar um prompt antigo se o usuário simplesmente navegar para /generator.php
+    if (isset($_SESSION['generated_prompt_text'])) {
+         error_log("Limpando generated_prompt_text e last_input_parameters em GET (não reutilização)");
+         unset($_SESSION['generated_prompt_text']);
+    }
     if (isset($_SESSION['last_input_parameters'])) unset($_SESSION['last_input_parameters']);
 }
+error_log("Sessão no final de generator.php: " . print_r($_SESSION, true));
 
 require_once __DIR__ . '/../src/templates/footer.php';
 ?>

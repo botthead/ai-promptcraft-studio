@@ -41,7 +41,7 @@ try {
     $user_key_info = $stmt_key->fetch(PDO::FETCH_ASSOC);
 
     if ($user_key_info && !empty($user_key_info['gemini_api_key_encrypted'])) {
-        error_log("API Key Criptografada encontrada: " . substr($user_key_info['gemini_api_key_encrypted'], 0, 10) . "..."); // Log inicial da chave criptografada
+        error_log("API Key Criptografada encontrada: " . substr($user_key_info['gemini_api_key_encrypted'], 0, 10) . "...");
         $decrypted_key = decrypt_data($user_key_info['gemini_api_key_encrypted']);
         if ($decrypted_key) {
             $api_key = $decrypted_key;
@@ -63,9 +63,7 @@ try {
     redirect(BASE_URL . 'generator.php');
 }
 
-// Se a API Key não pôde ser obtida, o script já terá redirecionado.
-// Se chegamos aqui, $api_key DEVE ter um valor.
-if (!$api_key) { // Esta verificação é uma dupla segurança, mas o redirect anterior deveria ter pego.
+if (!$api_key) {
     error_log("API Key indisponível após tentativa de descriptografia (dupla checagem).");
     $_SESSION['gemini_api_error'] = "Chave API do Gemini indisponível (erro interno).";
     redirect(BASE_URL . 'generator.php');
@@ -74,9 +72,8 @@ if (!$api_key) { // Esta verificação é uma dupla segurança, mas o redirect a
 error_log("API Key a ser usada (início): " . substr($api_key, 0, 5) . "...");
 
 // 4. Preparar e Enviar Requisição para a API Gemini (usando cURL)
-// ESTE BLOCO DE CÓDIGO FOI MOVIDO PARA FORA DO IF ANTERIOR
+// ESTE BLOCO ESTÁ CORRETAMENTE POSICIONADO AQUI:
 $gemini_api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" . $api_key;
-// Ou para gemini-pro: $gemini_api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" . $api_key;
 
 $request_body = [
     "contents" => [
@@ -88,14 +85,12 @@ $request_body = [
     ],
     // "generationConfig" => [
     //   "temperature" => 0.9,
-    //   "topK" => 1,
-    //   "topP" => 1,
-    //   "maxOutputTokens" => 2048, // Ajuste conforme necessário
+    //   "maxOutputTokens" => 2048,
     // ]
 ];
 $json_request_body = json_encode($request_body);
 
-error_log("Preparando chamada cURL para: " . $gemini_api_url); // Log da URL sem a chave completa
+error_log("Preparando chamada cURL para (URL sem a chave completa para segurança do log): " . explode('?key=', $gemini_api_url)[0] . "?key=SUA_CHAVE_AQUI");
 error_log("Corpo da requisição cURL: " . $json_request_body);
 
 $ch = curl_init();
@@ -106,8 +101,8 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, $json_request_body);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Content-Type: application/json'
 ]);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15); // Aumentei um pouco
-curl_setopt($ch, CURLOPT_TIMEOUT, 45);      // Aumentei um pouco
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+curl_setopt($ch, CURLOPT_TIMEOUT, 45);
 
 $api_response_raw = curl_exec($ch);
 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -116,15 +111,11 @@ curl_close($ch);
 
 error_log("cURL HTTP Code: " . $http_code);
 error_log("cURL Error: " . $curl_error);
-// Não logar a resposta crua inteira se for muito grande ou contiver dados sensíveis,
-// a menos que estritamente necessário para depuração e depois remover.
-// error_log("cURL Raw Response: " . $api_response_raw); 
-if (strlen($api_response_raw) < 1000) { // Loga respostas pequenas
+if (strlen($api_response_raw) < 1000) {
     error_log("cURL Raw Response: " . $api_response_raw);
 } else {
     error_log("cURL Raw Response (início): " . substr($api_response_raw, 0, 200) . "...");
 }
-
 
 // 5. Processar Resposta da API
 if ($curl_error) {
@@ -167,6 +158,6 @@ if ($curl_error) {
 }
 
 // 6. Redirecionar de volta para generator.php
-error_log("Sessão antes do redirect: " . print_r($_SESSION, true));
+error_log("Sessão antes do redirect em call_gemini_api_action: " . print_r($_SESSION, true));
 redirect(BASE_URL . 'generator.php');
 ?>
