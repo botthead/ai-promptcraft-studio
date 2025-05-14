@@ -1,163 +1,167 @@
 <?php
-// src/actions/call_gemini_api_action.php
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-error_log("--- Iniciando call_gemini_api_action.php ---");
+// src/Actions/call_gemini_api_action.php
+// Este script é INCLUÍDO por public/api.php. Ele NÃO deve ser acessado diretamente.
+// Assume que a sessão já foi iniciada e a autenticação já foi verificada em api.php.
+// Assume que headers('Content-Type: application/json') já foi definido em api.php.
 
-require_once __DIR__ . '/../config/constants.php';
-require_once __DIR__ . '/../core/functions.php';
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../core/auth.php';
+// Não chame session_start() ou header() aqui (a menos que seja para um erro específico que api.php não trata)
+// Não chame exit() ou die() no final, a menos que seja um erro crítico antes de gerar JSON.
 
-require_login();
+use GeminiAPI\Client;
+use GeminiAPI\Resources\Parts\TextPart;
+use GeminiAPI\Enums\MimeType;
+use GeminiAPI\Resources\Parts\ImagePart;
 
-error_log("POST data: " . print_r($_POST, true));
+// Certifique-se que a chave API e o cliente Gemini estão configurados
+// A chave deve vir do perfil do usuário logado, não de uma constante global por segurança (TODO)
+// Por enquanto, vamos buscar a chave do usuário logado na sessão/BD
+// A variável $pdo já deve estar disponível, vindo de public/api.php
+$user_id = $_SESSION['user_id'] ?? null; // Obtenha user_id da sessão
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['prompt_text_to_gemini'])) {
-    error_log("Validação inicial falhou: Método não é POST ou prompt_text_to_gemini não está setado.");
-    $_SESSION['gemini_api_error'] = "Requisição inválida para a API Gemini.";
-    redirect(BASE_URL . 'generator.php');
-}
-
-$user_id = $_SESSION['user_id'];
-$prompt_text = trim($_POST['prompt_text_to_gemini']);
-error_log("Prompt recebido: " . $prompt_text);
-
-if (empty($prompt_text)) {
-    error_log("Prompt vazio.");
-    $_SESSION['gemini_api_error'] = "O texto do prompt não pode estar vazio.";
-    redirect(BASE_URL . 'generator.php');
+if (!$user_id) {
+    // Isso NÃO deve acontecer se auth_check em api.php funcionar, mas é uma segurança.
+    http_response_code(401); // Unauthorized
+    echo json_encode(['success' => false, 'message' => 'Usuário não autenticado para chamar a API.', 'error_type' => 'auth_required']);
+    return; // Use return em vez de exit/die quando incluído
 }
 
-unset($_SESSION['gemini_api_response']);
-unset($_SESSION['gemini_api_error']);
-
-$api_key = null;
+// TODO: Buscar a chave API Gemini do usuário logado no banco de dados
 try {
-    $stmt_key = $pdo->prepare("SELECT gemini_api_key_encrypted FROM users WHERE id = :user_id");
-    $stmt_key->bindParam(':user_id', $user_id, PDO::PARAM_INT);
-    $stmt_key->execute();
-    $user_key_info = $stmt_key->fetch(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare("SELECT gemini_api_key_encrypted FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($user_key_info && !empty($user_key_info['gemini_api_key_encrypted'])) {
-        error_log("API Key Criptografada encontrada: " . substr($user_key_info['gemini_api_key_encrypted'], 0, 10) . "...");
-        $decrypted_key = decrypt_data($user_key_info['gemini_api_key_encrypted']);
-        if ($decrypted_key) {
-            $api_key = $decrypted_key;
-            error_log("API Key Descriptografada com sucesso.");
-        } else {
-            error_log("Falha ao descriptografar API Key para user_id {$user_id}.");
-            $_SESSION['gemini_api_error'] = "Falha ao acessar sua chave API do Gemini. Verifique as configurações de criptografia ou reconfigure sua chave no perfil.";
-            redirect(BASE_URL . 'generator.php');
-        }
-    } else {
-        error_log("API Key não configurada para user_id {$user_id}.");
-        $_SESSION['gemini_api_error'] = "Chave API do Gemini não configurada. Por favor, configure-a no seu perfil.";
-        redirect(BASE_URL . 'generator.php');
+    if (!$user || empty($user['gemini_api_key_encrypted'])) {
+        http_response_code(400); // Bad Request ou 402 Payment Required (depende da lógica)
+        echo json_encode(['success' => false, 'message' => 'Chave API Gemini não configurada no seu perfil.', 'error_type' => 'api_key_missing']);
+         return;
     }
 
-} catch (PDOException $e) {
-    error_log("PDOException ao buscar API Key: " . $e->getMessage());
-    $_SESSION['gemini_api_error'] = "Erro ao buscar sua configuração de API Key.";
-    redirect(BASE_URL . 'generator.php');
-}
+    // TODO: Descriptografar a chave API (usando a chave de criptografia de Constants.php e funções de functions.php)
+    $gemini_api_key = decryptData($user['gemini_api_key_encrypted'], ENCRYPTION_KEY); // Implemente decryptData na functions.php
 
-if (!$api_key) {
-    error_log("API Key indisponível após tentativa de descriptografia (dupla checagem).");
-    $_SESSION['gemini_api_error'] = "Chave API do Gemini indisponível (erro interno).";
-    redirect(BASE_URL . 'generator.php');
-}
-
-error_log("API Key a ser usada (início): " . substr($api_key, 0, 5) . "...");
-
-// 4. Preparar e Enviar Requisição para a API Gemini (usando cURL)
-// ESTE BLOCO ESTÁ CORRETAMENTE POSICIONADO AQUI:
-$gemini_api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" . $api_key;
-
-$request_body = [
-    "contents" => [
-        [
-            "parts" => [
-                ["text" => $prompt_text]
-            ]
-        ]
-    ],
-    // "generationConfig" => [
-    //   "temperature" => 0.9,
-    //   "maxOutputTokens" => 2048,
-    // ]
-];
-$json_request_body = json_encode($request_body);
-
-error_log("Preparando chamada cURL para (URL sem a chave completa para segurança do log): " . explode('?key=', $gemini_api_url)[0] . "?key=SUA_CHAVE_AQUI");
-error_log("Corpo da requisição cURL: " . $json_request_body);
-
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $gemini_api_url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-curl_setopt($ch, CURLOPT_POST, 1);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $json_request_body);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json'
-]);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-curl_setopt($ch, CURLOPT_TIMEOUT, 45);
-
-$api_response_raw = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curl_error = curl_error($ch);
-curl_close($ch);
-
-error_log("cURL HTTP Code: " . $http_code);
-error_log("cURL Error: " . $curl_error);
-if (strlen($api_response_raw) < 1000) {
-    error_log("cURL Raw Response: " . $api_response_raw);
-} else {
-    error_log("cURL Raw Response (início): " . substr($api_response_raw, 0, 200) . "...");
-}
-
-// 5. Processar Resposta da API
-if ($curl_error) {
-    $_SESSION['gemini_api_error'] = "Erro na comunicação com a API Gemini (cURL): " . e($curl_error);
-    error_log("cURL Error para Gemini API (user_id {$user_id}): " . $curl_error);
-} elseif ($api_response_raw) {
-    $api_response_data = json_decode($api_response_raw, true);
-
-    if ($http_code >= 200 && $http_code < 300) {
-        if (isset($api_response_data['candidates'][0]['content']['parts'][0]['text'])) {
-            $_SESSION['gemini_api_response'] = $api_response_data['candidates'][0]['content']['parts'][0]['text'];
-            error_log("Resposta Gemini OK (início): " . substr($_SESSION['gemini_api_response'], 0, 100) . "...");
-        } elseif (isset($api_response_data['promptFeedback']['blockReason'])) {
-            $block_reason = $api_response_data['promptFeedback']['blockReason'];
-            $safety_ratings_info = "";
-            if(isset($api_response_data['promptFeedback']['safetyRatings'])){
-                foreach($api_response_data['promptFeedback']['safetyRatings'] as $rating){
-                    $safety_ratings_info .= $rating['category'] . ": " . $rating['probability'] . "; ";
-                }
-            }
-            $_SESSION['gemini_api_error'] = "A API Gemini bloqueou a resposta. Razão: " . e($block_reason) . ". Detalhes: " . e(rtrim($safety_ratings_info, '; '));
-            error_log("Gemini API content blocked (user_id {$user_id}): Reason: {$block_reason}. Ratings: {$safety_ratings_info}");
-        } else {
-            $_SESSION['gemini_api_error'] = "Resposta da API Gemini recebida, mas em formato inesperado.";
-            error_log("Resposta inesperada da Gemini API (user_id {$user_id}): " . $api_response_raw);
-        }
-    } else {
-        $error_message = "Erro da API Gemini (HTTP " . $http_code . "): ";
-        if (isset($api_response_data['error']['message'])) {
-            $error_message .= e($api_response_data['error']['message']);
-        } else {
-            $error_message .= "Resposta de erro não detalhada.";
-        }
-        $_SESSION['gemini_api_error'] = $error_message;
-        error_log("Erro da API Gemini (user_id {$user_id}, HTTP {$http_code}): " . $api_response_raw);
+    if (!$gemini_api_key) {
+         http_response_code(500); // Internal Server Error
+         echo json_encode(['success' => false, 'message' => 'Erro ao descriptografar a chave API.', 'error_type' => 'decryption_failed']);
+         return;
     }
-} else {
-    $_SESSION['gemini_api_error'] = "Nenhuma resposta recebida da API Gemini (HTTP " . $http_code . "). Verifique a conexão ou o endpoint da API.";
-    error_log("Nenhuma resposta da Gemini API (user_id {$user_id}, HTTP {$http_code})");
+
+
+    // Instanciar o cliente Gemini (assumindo que a biblioteca via Composer está instalada)
+    // require_once __DIR__ . '/../../vendor/autoload.php'; // Assumindo vendor está na raiz do projeto
+     $client = new Client($gemini_api_key);
+
+} catch (\PDOException $e) {
+     error_log("Erro PDO ao buscar chave API do usuário: " . $e->getMessage());
+     http_response_code(500);
+     echo json_encode(['success' => false, 'message' => 'Erro interno do servidor ao buscar chave API.', 'error_type' => 'db_error']);
+     return;
+} catch (\Exception $e) {
+     error_log("Erro geral ao configurar API Gemini: " . $e->getMessage());
+     http_response_code(500);
+     echo json_encode(['success' => false, 'message' => 'Erro interno do servidor ao configurar a API.', 'error_type' => 'general_api_setup_error']);
+     return;
 }
 
-// 6. Redirecionar de volta para generator.php
-error_log("Sessão antes do redirect em call_gemini_api_action: " . print_r($_SESSION, true));
-redirect(BASE_URL . 'generator.php');
+
+// --- Processar os dados recebidos do AJAX via $_POST ---
+// Estes são os dados enviados pelo FormData em main.js
+$promptText = $_POST['prompt_text'] ?? '';
+$theme = $_POST['theme'] ?? ''; // Exemplo: obtenha outros campos se necessário
+$style = $_POST['style'] ?? '';
+$tone = $_POST['tone'] ?? '';
+$action_name = $_POST['action'] ?? 'call_gemini'; // Ação solicitada (deve ser 'call_gemini')
+
+if (empty($promptText)) {
+    http_response_code(400); // Bad Request
+    echo json_encode(['success' => false, 'message' => 'O texto do prompt está vazio.', 'error_type' => 'empty_prompt']);
+    return;
+}
+
+// Preparar o conteúdo para enviar para a API Gemini
+// A API Gemini aceita um array de 'parts'. Pode ser só texto, ou texto + imagem.
+$parts = [new TextPart($promptText)];
+// TODO: Se seu formulário incluir upload de imagem, adicione aqui as ImageParts
+
+// --- Chamar a API Gemini ---
+$generatedText = '';
+$modelUsed = 'gemini-1.5-pro'; // Defina o modelo a ser usado (ou pegue de um input/config)
+
+try {
+    // Usa o cliente instanciado para enviar o prompt para o modelo
+    $response = $client->generativeModel($modelUsed)->generateContent(...$parts); // Usa splat operator (...) para passar o array parts
+
+    // Obtém o texto gerado da resposta
+    $generatedText = $response->text();
+
+    // TODO: Salvar histórico na tabela prompts_history (assumindo que já existe)
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO prompts_history (user_id, prompt_title, input_parameters, prompt_text, generated_text, model_used)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        // TODO: Obtenha um título se existir no formulário
+        $prompt_title = $_POST['title'] ?? 'Prompt Gerado'; // Título opcional
+        // Salva os parâmetros de input originais como JSON
+        $input_params_json = json_encode([
+            'theme' => $theme,
+            'style' => $style,
+            'tone' => $tone,
+            // ... outros campos do formulário ...
+        ]);
+        $stmt->execute([
+            $user_id,
+            $prompt_title,
+            $input_params_json, // Salva como JSON
+            $promptText,
+            $generatedText,
+            $modelUsed
+        ]);
+         error_log("Histórico do prompt salvo com sucesso.");
+
+    } catch (\PDOException $e) {
+        // Loga o erro do banco, mas não necessariamente falha toda a requisição API
+        error_log("ERRO ao salvar histórico do prompt no BD: " . $e->getMessage());
+        // Você pode decidir se isso deve causar um erro 'success: false' na resposta JSON ou não
+    }
+
+
+    // --- Retornar a resposta da API Gemini em JSON ---
+    echo json_encode([
+        'success' => true,
+        'message' => 'Prompt gerado com sucesso!',
+        'prompt_text_sent' => $promptText, // Retorna o prompt enviado para referência
+        'generated_text' => $generatedText,
+        'model_used' => $modelUsed,
+        'input_parameters' => json_decode($input_params_json, true) // Retorna os parâmetros de input (opcional)
+    ]);
+
+} catch (\Exception $e) {
+    // Captura erros na chamada da API Gemini
+    error_log("ERRO ao chamar API Gemini: " . $e->getMessage());
+
+    // Tenta identificar o tipo de erro para retornar uma mensagem útil
+    $errorMessage = 'Erro ao comunicar com a API Gemini.';
+    $errorType = 'gemini_api_error';
+
+    if (strpos($e->getMessage(), 'API key not valid') !== false) {
+         $errorMessage = 'Sua chave API Gemini parece ser inválida.';
+         $errorType = 'api_key_invalid';
+    } elseif (strpos($e->getMessage(), 'Quota exceeded') !== false) {
+         $errorMessage = 'Cota da API Gemini excedida. Verifique seu plano.';
+         $errorType = 'quota_exceeded';
+    }
+    // TODO: Adicionar mais verificações de tipos de erro comuns da API
+
+    http_response_code(500); // Internal Server Error ou um código mais específico se aplicável (e.g., 402 Payment Required para quota)
+    echo json_encode([
+        'success' => false,
+        'message' => $errorMessage,
+        'error_type' => $errorType,
+        // Opcional: incluir detalhes do erro em ambiente de dev (NÃO em prod)
+        // 'debug' => $e->getMessage()
+    ]);
+}
+
+// Não chame exit() aqui
 ?>

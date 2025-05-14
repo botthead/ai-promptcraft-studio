@@ -1,8 +1,15 @@
-    </main> <!-- Fim do .container de main -->
-    <footer class="container" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--muted-border-color);">
-        <small>© <?php echo date('Y'); ?> <?php echo htmlspecialchars(SITE_NAME, ENT_QUOTES, 'UTF-8'); ?>. Todos os direitos reservados.</small>
+<?php
+// src/templates/footer.php
+?>
+    </main> <!-- Fim do .container de <main> -->
+    
+    <footer class="container" style="margin-top: 2rem; ...">
+        <small>© <?php echo date('Y'); ?> <?php echo e(SITE_NAME); ?>. Todos os direitos reservados.</small>
     </footer>
-    <script src="<?php echo BASE_URL; ?>js/main.js"></script>
-    <!-- Outros scripts JS via CDN podem ser adicionados aqui -->
+
+    <!-- 1. Bootstrap JS Bundle (Popper.js incluído) - DEVE VIR PRIMEIRO -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" ...></script>
+    <script src="<?php echo e(BASE_URL); ?>js/main.js"></script> <!-- SEU SCRIPT DEPOIS -->
 </body>
 </html>
+
