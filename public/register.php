@@ -1,87 +1,113 @@
- 
 <?php
 // public/register.php
 $page_title = "Registrar Nova Conta";
 
-// Inclui o auth.php para usar require_guest()
-// O header.php já inclui constants.php e inicia a sessão.
-require_once __DIR__ . '/../src/core/auth.php'; // Para require_guest()
-require_guest(); // Se o usuário já estiver logado, redireciona para o dashboard
+require_once __DIR__ . '/../src/core/auth.php';
+require_guest(); 
 
 require_once __DIR__ . '/../src/templates/header.php';
 ?>
 
-<article>
-    <header>
-        <h2><?php echo htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8'); ?></h2>
-    </header>
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <h2 class="card-title text-center mb-4 fw-bold">
+                    <i class="bi bi-person-plus-fill me-2"></i><?php echo e($page_title); ?>
+                </h2>
 
-    <?php
-    // Exibir mensagens de erro ou sucesso da sessão, se houver
-    if (isset($_SESSION['error_message'])) {
-        echo '<p class="error-message" style="color: red;">' . htmlspecialchars($_SESSION['error_message'], ENT_QUOTES, 'UTF-8') . '</p>';
-        unset($_SESSION['error_message']); // Limpa a mensagem após exibir
-    }
-    if (isset($_SESSION['success_message'])) {
-        echo '<p class="success-message" style="color: green;">' . htmlspecialchars($_SESSION['success_message'], ENT_QUOTES, 'UTF-8') . '</p>';
-        unset($_SESSION['success_message']); // Limpa a mensagem após exibir
-    }
-    ?>
+                <?php
+                if (isset($_SESSION['error_message'])) {
+                    echo '<div class="alert alert-danger" role="alert">' . e($_SESSION['error_message']) . '</div>';
+                    unset($_SESSION['error_message']);
+                }
+                // Não costuma haver 'success_message' na página de registro, mas caso haja:
+                if (isset($_SESSION['success_message'])) {
+                    echo '<div class="alert alert-success" role="alert">' . e($_SESSION['success_message']) . '</div>';
+                    unset($_SESSION['success_message']);
+                }
+                ?>
 
-    <form action="<?php echo BASE_URL; ?>../src/actions/register_action.php" method="POST">
-        <!-- Campo Nome de Usuário -->
-        <label for="username">Nome de Usuário:</label>
-        <input type="text" id="username" name="username" required 
-               value="<?php echo isset($_SESSION['form_data']['username']) ? htmlspecialchars($_SESSION['form_data']['username'], ENT_QUOTES, 'UTF-8') : ''; ?>">
-        <?php if (isset($_SESSION['form_errors']['username'])): ?>
-            <small style="color: red;"><?php echo htmlspecialchars($_SESSION['form_errors']['username'], ENT_QUOTES, 'UTF-8'); ?></small>
-        <?php endif; ?>
+                <form action="<?php echo e(BASE_URL); ?>../src/actions/register_action.php" method="POST" novalidate>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Nome de Usuário:</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control form-control-lg <?php echo isset($_SESSION['form_errors']['username']) ? 'is-invalid' : ''; ?>" 
+                                   id="username" name="username" required 
+                                   value="<?php echo e($_SESSION['form_data']['username'] ?? ''); ?>">
+                        </div>
+                        <?php if (isset($_SESSION['form_errors']['username'])): ?>
+                            <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors']['username']); ?></div>
+                        <?php endif; ?>
+                    </div>
 
-        <!-- Campo Email -->
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" required
-               value="<?php echo isset($_SESSION['form_data']['email']) ? htmlspecialchars($_SESSION['form_data']['email'], ENT_QUOTES, 'UTF-8') : ''; ?>">
-        <?php if (isset($_SESSION['form_errors']['email'])): ?>
-            <small style="color: red;"><?php echo htmlspecialchars($_SESSION['form_errors']['email'], ENT_QUOTES, 'UTF-8'); ?></small>
-        <?php endif; ?>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email:</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                            <input type="email" class="form-control form-control-lg <?php echo isset($_SESSION['form_errors']['email']) ? 'is-invalid' : ''; ?>" 
+                                   id="email" name="email" required
+                                   value="<?php echo e($_SESSION['form_data']['email'] ?? ''); ?>">
+                        </div>
+                        <?php if (isset($_SESSION['form_errors']['email'])): ?>
+                            <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors']['email']); ?></div>
+                        <?php endif; ?>
+                    </div>
 
-        <!-- Campo Senha -->
-        <label for="password">Senha:</label>
-        <input type="password" id="password" name="password" required>
-        <?php if (isset($_SESSION['form_errors']['password'])): ?>
-            <small style="color: red;"><?php echo htmlspecialchars($_SESSION['form_errors']['password'], ENT_QUOTES, 'UTF-8'); ?></small>
-        <?php endif; ?>
-        <small>Mínimo de 8 caracteres, incluindo letras e números.</small>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Senha:</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <input type="password" class="form-control form-control-lg <?php echo isset($_SESSION['form_errors']['password']) ? 'is-invalid' : ''; ?>" 
+                                   id="password" name="password" required>
+                        </div>
+                        <div class="form-text">Mínimo de 8 caracteres, incluindo letras e números.</div>
+                        <?php if (isset($_SESSION['form_errors']['password'])): ?>
+                            <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors']['password']); ?></div>
+                        <?php endif; ?>
+                    </div>
 
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Confirmar Senha:</label>
+                        <div class="input-group">
+                             <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+                            <input type="password" class="form-control form-control-lg <?php echo isset($_SESSION['form_errors']['confirm_password']) ? 'is-invalid' : ''; ?>" 
+                                   id="confirm_password" name="confirm_password" required>
+                        </div>
+                        <?php if (isset($_SESSION['form_errors']['confirm_password'])): ?>
+                            <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors']['confirm_password']); ?></div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input <?php echo isset($_SESSION['form_errors']['terms']) ? 'is-invalid' : ''; ?>" 
+                               type="checkbox" value="accepted" id="terms" name="terms" required>
+                        <label class="form-check-label" for="terms">
+                            Eu li e aceito os <a href="#" target="_blank">Termos de Uso</a> e <a href="#" target="_blank">Política de Privacidade</a>.
+                        </label>
+                        <?php if (isset($_SESSION['form_errors']['terms'])): ?>
+                            <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors']['terms']); ?></div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle-fill me-2"></i>Registrar
+                        </button>
+                    </div>
 
-        <!-- Campo Confirmar Senha -->
-        <label for="confirm_password">Confirmar Senha:</label>
-        <input type="password" id="confirm_password" name="confirm_password" required>
-        <?php if (isset($_SESSION['form_errors']['confirm_password'])): ?>
-            <small style="color: red;"><?php echo htmlspecialchars($_SESSION['form_errors']['confirm_password'], ENT_QUOTES, 'UTF-8'); ?></small>
-        <?php endif; ?>
-
-        <!-- Termos de Uso (Opcional, mas bom para ter) -->
-        <div>
-            <input type="checkbox" id="terms" name="terms" required>
-            <label for="terms" style="display: inline;">Eu li e aceito os <a href="#">Termos de Uso</a> e <a href="#">Política de Privacidade</a>.</label>
-            <?php if (isset($_SESSION['form_errors']['terms'])): ?>
-                <br><small style="color: red;"><?php echo htmlspecialchars($_SESSION['form_errors']['terms'], ENT_QUOTES, 'UTF-8'); ?></small>
-            <?php endif; ?>
+                    <div class="text-center">
+                        <p class="mb-0">Já tem uma conta? <a href="<?php echo e(BASE_URL); ?>login.php">Faça login aqui</a>.</p>
+                    </div>
+                </form>
+            </div>
         </div>
-        
-        <button type="submit">Registrar</button>
-    </form>
-
-    <p style="margin-top: 1rem;">
-        Já tem uma conta? <a href="<?php echo BASE_URL; ?>login.php">Faça login aqui</a>.
-    </p>
-</article>
+    </div>
+</div>
 
 <?php
-// Limpar dados de formulário e erros da sessão após exibi-los
 if (isset($_SESSION['form_data'])) unset($_SESSION['form_data']);
 if (isset($_SESSION['form_errors'])) unset($_SESSION['form_errors']);
-
 require_once __DIR__ . '/../src/templates/footer.php';
 ?>

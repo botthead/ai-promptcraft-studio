@@ -1,68 +1,79 @@
- 
 <?php
 // public/login.php
-$page_title = "Login";
+$page_title = "Acessar sua Conta";
 
-require_once __DIR__ . '/../src/core/auth.php'; // Para require_guest()
-require_guest(); // Se o usuário já estiver logado, redireciona para o dashboard
+require_once __DIR__ . '/../src/core/auth.php';
+require_guest(); // Redireciona para o dashboard se já estiver logado
 
 require_once __DIR__ . '/../src/templates/header.php';
 ?>
 
-<article>
-    <header>
-        <h2><?php echo htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8'); ?></h2>
-    </header>
+<div class="container py-5"> 
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5 col-xl-4"> 
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-4 p-sm-5">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-box-arrow-in-right display-4 text-primary"></i>
+                        <h1 class="h3 fw-bold mt-2 mb-0"><?php echo e($page_title); ?></h1>
+                    </div>
 
-    <?php
-    // Exibir mensagens de erro ou sucesso da sessão, se houver
-    if (isset($_SESSION['error_message'])) {
-        echo '<p class="error-message" style="color: red;">' . htmlspecialchars($_SESSION['error_message'], ENT_QUOTES, 'UTF-8') . '</p>';
-        unset($_SESSION['error_message']);
-    }
-    if (isset($_SESSION['success_message'])) {
-        echo '<p class="success-message" style="color: green;">' . htmlspecialchars($_SESSION['success_message'], ENT_QUOTES, 'UTF-8') . '</p>';
-        unset($_SESSION['success_message']);
-    }
-    ?>
+                    <?php
+                    if (isset($_SESSION['error_message'])) {
+                        echo '<div class="alert alert-danger" role="alert">' . e($_SESSION['error_message']) . '</div>';
+                        unset($_SESSION['error_message']);
+                    }
+                    if (isset($_SESSION['success_message'])) { // Ex: após registro bem-sucedido
+                        echo '<div class="alert alert-success" role="alert">' . e($_SESSION['success_message']) . '</div>';
+                        unset($_SESSION['success_message']);
+                    }
+                    ?>
 
-    <form action="<?php echo BASE_URL; ?>../src/actions/login_action.php" method="POST">
-        <!-- Campo Nome de Usuário ou Email -->
-        <label for="login_identifier">Nome de Usuário ou Email:</label>
-        <input type="text" id="login_identifier" name="login_identifier" required
-               value="<?php echo isset($_SESSION['form_data']['login_identifier']) ? htmlspecialchars($_SESSION['form_data']['login_identifier'], ENT_QUOTES, 'UTF-8') : ''; ?>">
-        <?php if (isset($_SESSION['form_errors']['login_identifier'])): ?>
-            <small style="color: red;"><?php echo htmlspecialchars($_SESSION['form_errors']['login_identifier'], ENT_QUOTES, 'UTF-8'); ?></small>
-        <?php endif; ?>
+                    <form action="<?php echo e(BASE_URL); ?>../src/actions/login_action.php" method="POST" novalidate>
+                        <div class="mb-3">
+                            <label for="login_identifier" class="form-label">Nome de Usuário ou Email</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                                <input type="text" class="form-control <?php echo isset($_SESSION['form_errors']['login_identifier']) ? 'is-invalid' : ''; ?>" 
+                                       id="login_identifier" name="login_identifier" required
+                                       value="<?php echo e($_SESSION['form_data']['login_identifier'] ?? ''); ?>" autofocus>
+                            </div>
+                            <?php if (isset($_SESSION['form_errors']['login_identifier'])): ?>
+                                <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors']['login_identifier']); ?></div>
+                            <?php endif; ?>
+                        </div>
 
-        <!-- Campo Senha -->
-        <label for="password">Senha:</label>
-        <input type="password" id="password" name="password" required>
-        <?php if (isset($_SESSION['form_errors']['password'])): ?>
-            <small style="color: red;"><?php echo htmlspecialchars($_SESSION['form_errors']['password'], ENT_QUOTES, 'UTF-8'); ?></small>
-        <?php endif; ?>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Senha</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                                <input type="password" class="form-control <?php echo isset($_SESSION['form_errors']['password']) ? 'is-invalid' : ''; ?>" 
+                                       id="password" name="password" required>
+                            </div>
+                            <?php if (isset($_SESSION['form_errors']['password'])): ?>
+                                <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors']['password']); ?></div>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <div class="d-grid mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                Entrar
+                            </button>
+                        </div>
 
-        <!-- (Opcional) Lembrar-me -->
-        <!-- <label for="remember_me">
-            <input type="checkbox" id="remember_me" name="remember_me">
-            Lembrar-me
-        </label> -->
-        
-        <button type="submit">Login</button>
-    </form>
-
-    <p style="margin-top: 1rem;">
-        Não tem uma conta? <a href="<?php echo BASE_URL; ?>register.php">Registre-se aqui</a>.
-    </p>
-    <!-- <p>
-        <a href="#">Esqueceu sua senha?</a> (Funcionalidade futura)
-    </p> -->
-</article>
+                        <div class="text-center">
+                            <p class="mb-0 text-muted">Não tem uma conta? <a href="<?php echo e(BASE_URL); ?>register.php" class="fw-medium">Registre-se aqui</a>.</p>
+                            <!-- <p class="mt-2 small"><a href="#" class="text-muted">Esqueceu sua senha?</a></p> -->
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <?php
-// Limpar dados de formulário e erros da sessão após exibi-los
 if (isset($_SESSION['form_data'])) unset($_SESSION['form_data']);
 if (isset($_SESSION['form_errors'])) unset($_SESSION['form_errors']);
-
 require_once __DIR__ . '/../src/templates/footer.php';
 ?>

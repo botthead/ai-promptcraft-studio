@@ -6,7 +6,7 @@ require_once __DIR__ . '/../src/core/auth.php';
 require_login(); 
 
 require_once __DIR__ . '/../src/config/database.php'; 
-require_once __DIR__ . '/../src/templates/header.php'; // header.php já exibe global_success_message
+require_once __DIR__ . '/../src/templates/header.php';
 
 $user_id = $_SESSION['user_id'];
 $prompts = [];
@@ -20,142 +20,88 @@ try {
     $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
     $stmt->execute();
     $prompts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
 } catch (PDOException $e) {
     error_log("PDOException ao buscar histórico de prompts para user_id {$user_id}: " . $e->getMessage());
-    // Define uma mensagem de erro global para ser exibida pelo header.php
-    $_SESSION['global_error_message'] = "Erro ao carregar seu histórico de prompts. Tente novamente mais tarde.";
+    // A mensagem global de erro já é tratada no header.php
 }
 ?>
 
-<article>
-    <header>
-        <h2><?php echo e($page_title); ?></h2>
-        <p>Aqui você pode ver todos os prompts que você gerou e salvou, incluindo as respostas da API Gemini quando disponíveis.</p>
-    </header>
+<div class="container py-4"> 
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="display-5 fw-bold mb-0">
+            <i class="bi bi-list-stars me-2"></i><?php echo e($page_title); ?>
+        </h1>
+        <a href="<?php echo e(BASE_URL); ?>generator.php" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Criar Novo Prompt
+        </a>
+    </div>
+    <p class="lead text-muted mb-4">
+        Revise e gerencie seus prompts salvos. Respostas da API Gemini também são exibidas quando disponíveis.
+    </p>
 
     <?php
-    // Mensagens específicas para ações de exclusão nesta página
-    if (!empty($_SESSION['success_message_history'])): ?>
-        <div class="notice success" style="background-color: var(--pico-form-element-background-color); border-left-color: var(--pico-color-green); margin-bottom: 1rem; padding:0.75rem;">
-            <p><?php echo e($_SESSION['success_message_history']); ?></p>
-        </div>
-        <?php unset($_SESSION['success_message_history']); ?>
-    <?php endif; ?>
-    <?php if (!empty($_SESSION['error_message_history'])): ?>
-        <div class="notice error" style="background-color: var(--pico-form-element-background-color); border-left-color: var(--pico-color-red); margin-bottom: 1rem; padding:0.75rem;">
-            <p><?php echo e($_SESSION['error_message_history']); ?></p>
-        </div>
-        <?php unset($_SESSION['error_message_history']); ?>
-    <?php endif; ?>
-
+    // Mensagens específicas para ações de exclusão nesta página (se necessário, senão as globais bastam)
+    // ...
+    ?>
 
     <?php if (!empty($prompts)): ?>
-        <figure> <!-- Usar figure para tabelas é uma boa prática com PicoCSS -->
-            <table>
-                <thead>
-                    <tr>
-                        <th scope="col">Título</th>
-                        <th scope="col">Prompt Gerado (Início)</th>
-                        <th scope="col">Criado em</th>
-                        <th scope="col" style="text-align: right;">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($prompts as $prompt_idx => $prompt): ?>
-                        <tr>
-                            <td><?php echo e($prompt['title'] ?: '<em>Sem Título</em>'); ?></td>
-                            <td>
-                                <?php
-                                $preview_length = 80;
-                                $prompt_preview = mb_substr(strip_tags($prompt['generated_prompt_text']), 0, $preview_length);
-                                if (mb_strlen($prompt['generated_prompt_text']) > $preview_length) {
-                                    $prompt_preview .= '...';
-                                }
-                                echo e($prompt_preview);
-                                ?>
-                            </td>
-                            <td>
-                                <?php
-                                try {
-                                    $date = new DateTime($prompt['created_at']);
-                                    echo e($date->format('d/m/Y H:i'));
-                                } catch (Exception $ex) {
-                                    echo e($prompt['created_at']); // Fallback se a data for inválida
-                                }
-                                ?>
-                            </td>
-                            <td style="text-align: right; white-space: nowrap;">
-                                <!-- Botão para reutilizar (leva para generator.php com dados) -->
-                                <a href="<?php echo e(BASE_URL); ?>generator.php?reuse_prompt_id=<?php echo (int)$prompt['id']; ?>" 
-                                   role="button" class="outline secondary" title="Reutilizar este Prompt" style="padding: 0.375rem 0.75rem; font-size: 0.875rem;">
-                                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16" style="vertical-align: text-bottom;">
-                                      <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/>
-                                      <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
-                                   </svg>
-                                   Reutilizar
-                                </a>
-                                
-                                <form action="<?php echo e(BASE_URL); ?>../src/actions/delete_prompt_action.php" method="POST" style="display: inline-block; margin-left: 5px;">
-                                    <input type="hidden" name="prompt_id_to_delete" value="<?php echo (int)$prompt['id']; ?>">
-                                    <button type="submit" class="outline contrast" title="Excluir este Prompt" style="padding: 0.375rem 0.75rem; font-size: 0.875rem;" 
-                                            onclick="return confirm('Tem certeza que deseja excluir este prompt? Esta ação não pode ser desfeita.');">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16" style="vertical-align: text-bottom;">
-                                          <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
-                                          <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
-                                        </svg>
-                                        Excluir
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        <?php if (!empty($prompt['gemini_response'])): ?>
-                        <tr class="prompt-details-row">
-                            <td colspan="4">
-                                <details>
-                                    <summary style="cursor: pointer; color: var(--pico-primary); font-size: 0.9rem;">
-                                        Ver Resposta da API Gemini
-                                        <small style="font-weight:normal; color: var(--pico-muted-color);">(Clique para expandir/recolher)</small>
-                                    </summary>
-                                    <article style="margin-top: 0.5rem; padding: 1rem; border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius); background-color: var(--pico-card-background-color);">
-                                        <pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; font-size: 0.9em;"><?php echo e($prompt['gemini_response']); ?></pre>
-                                    </article>
-                                </details>
-                            </td>
-                        </tr>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </figure>
-    <?php else: ?>
-        <p>Você ainda não salvou nenhum prompt. <a href="<?php echo e(BASE_URL); ?>generator.php">Crie seu primeiro prompt agora!</a></p>
-    <?php endif; ?>
-</article>
+        <div class="list-group shadow-sm">
+            <?php foreach ($prompts as $prompt): ?>
+                <div class="list-group-item list-group-item-action flex-column align-items-start mb-2 border-0 shadow-sm rounded">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1 fw-semibold text-primary"><?php echo e($prompt['title'] ?: '<em>Prompt Sem Título</em>'); ?></h5>
+                        <small class="text-muted">
+                            <?php
+                            try { $date = new DateTime($prompt['created_at']); echo e($date->format('d/m/Y H:i')); }
+                            catch (Exception $ex) { echo e($prompt['created_at']); }
+                            ?>
+                        </small>
+                    </div>
+                    <p class="mb-1 text-muted small">
+                        <?php
+                        $preview_length = 150;
+                        $prompt_preview = mb_substr(strip_tags($prompt['generated_prompt_text']), 0, $preview_length);
+                        if (mb_strlen($prompt['generated_prompt_text']) > $preview_length) {
+                            $prompt_preview .= '...';
+                        }
+                        echo e($prompt_preview);
+                        ?>
+                    </p>
+                    
+                    <?php if (!empty($prompt['gemini_response'])): ?>
+                    <details class="mt-2 mb-2">
+                        <summary class="small text-info" style="cursor: pointer;">
+                            <i class="bi bi-robot me-1"></i>Ver Resposta da API Gemini
+                        </summary>
+                        <div class="mt-2 p-2 border rounded bg-light-subtle">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; font-size: 0.85em;"><?php echo e($prompt['gemini_response']); ?></pre>
+                        </div>
+                    </details>
+                    <?php endif; ?>
 
-<style>
-/* Estilo opcional para a linha de detalhes */
-.prompt-details-row td {
-    padding-top: 0.25rem; /* Reduzido */
-    padding-bottom: 1rem;
-    border-top: 1px dashed var(--pico-muted-border-color); /* Linha tracejada para separar */
-}
-.prompt-details-row details > summary {
-    padding: 0.25rem 0;
-    outline: none; /* Remove o outline padrão do focus no Firefox */
-}
-.prompt-details-row details > summary:focus {
-    /* Estilo de foco customizado se desejado, ou deixar o padrão do navegador */
-}
-.prompt-details-row details[open] > summary {
-    margin-bottom: 0.5rem;
-}
-.prompt-details-row details > summary small {
-    font-weight: normal;
-}
-/* Ajustar tamanho dos botões e ícones na tabela */
-/* Os estilos inline nos botões já fazem isso, mas pode ser centralizado aqui se preferir */
-</style>
+                    <div class="mt-2 text-end">
+                        <a href="<?php echo e(BASE_URL); ?>generator.php?reuse_prompt_id=<?php echo (int)$prompt['id']; ?>" 
+                           class="btn btn-sm btn-outline-secondary me-1" title="Reutilizar este Prompt">
+                           <i class="bi bi-arrow-clockwise"></i> <span class="d-none d-md-inline">Reutilizar</span>
+                        </a>
+                        <form action="<?php echo e(BASE_URL); ?>../src/actions/delete_prompt_action.php" method="POST" class="d-inline"
+                              onsubmit="return confirm('Tem certeza que deseja excluir este prompt?');">
+                            <input type="hidden" name="prompt_id_to_delete" value="<?php echo (int)$prompt['id']; ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir este Prompt">
+                                <i class="bi bi-trash"></i> <span class="d-none d-md-inline">Excluir</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-info text-center" role="alert">
+            <i class="bi bi-info-circle-fill me-2"></i>Você ainda não salvou nenhum prompt. 
+            <a href="<?php echo e(BASE_URL); ?>generator.php" class="alert-link">Crie seu primeiro prompt agora!</a>
+        </div>
+    <?php endif; ?>
+</div>
 
 <?php
 require_once __DIR__ . '/../src/templates/footer.php';

@@ -1,72 +1,140 @@
 <?php
 // src/templates/header.php
-// Este arquivo é incluído por arquivos dentro de public/
-// Ex: public/index.php faz require_once __DIR__ . '/../src/templates/header.php';
-
-// Inclui as constantes (que definem BASE_URL, SITE_NAME, etc.)
-// O caminho para src/config/constants.php a partir de src/templates/header.php é ../config/constants.php
-require_once dirname(__DIR__) . '/config/constants.php';
-
-// Inicia a sessão se ainda não estiver ativa
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
+// Este require_once deve vir primeiro para definir BASE_URL, SITE_NAME etc.
+require_once dirname(__DIR__) . '/config/constants.php';
 
-// Função e() para sanitizar a saída (se não estiver em functions.php ou se functions.php não for incluído antes)
-// É melhor garantir que functions.php seja incluído antes de usar e(),
-// mas por segurança, podemos defini-la aqui se não existir.
+// Função e() para sanitizar, se não definida globalmente antes
 if (!function_exists('e')) {
     function e($string) {
         return htmlspecialchars($string ?? '', ENT_QUOTES, 'UTF-8');
     }
 }
+$current_page_basename = basename($_SERVER['PHP_SELF']);
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR"> <!-- Alterado para pt-BR para maior especificidade -->
+<html lang="pt-BR" data-bs-theme="light">
 <head>
-    <meta charset="UTF-8"> <!-- Padrão HTML5 para charset -->
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo isset($page_title) ? e($page_title) . ' - ' : ''; echo e(SITE_NAME); ?></title>
     
-    <!-- Pico.css CDN -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@latest/css/pico.min.css">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     
-    <!-- Seu CSS customizado (DEVE VIR DEPOIS do Pico.css para sobrescrever/adicionar estilos) -->
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Google Fonts (Exemplo: Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Seu CSS customizado (DEVE VIR DEPOIS do Bootstrap) -->
     <link rel="stylesheet" href="<?php echo e(BASE_URL); ?>css/style.css">
-    
-    <!-- Você pode adicionar outros links de CSS ou meta tags aqui -->
+
+    <!-- Estilos inline mínimos para garantir a estrutura flex do body -->
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif; /* Reforça a fonte global */
+            background-color: #f8f9fa; /* Cor de fundo global */
+        }
+        main.flex-shrink-0 { /* Garante que o main não encolha e empurre o footer */
+            flex-grow: 1;
+        }
+        .navbar {
+             box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); /* Sombra sutil para o navbar */
+        }
+        /* Outros estilos globais podem ir para style.css */
+    </style>
 </head>
-<body>
-    <header class="container-fluid" style="padding-bottom: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--muted-border-color);">
-        <nav> <!-- Removido container-fluid daqui, pois o header já é. Nav pode ser container normal -->
-            <ul>
-                <li><a href="<?php echo e(BASE_URL); ?>index.php"><strong><?php echo e(SITE_NAME); ?></strong></a></li>
-            </ul>
-            <ul>
-                <?php if (isset($_SESSION['user_id'])): ?>
-                    <li><a href="<?php echo e(BASE_URL); ?>dashboard.php" <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'aria-current="page"' : ''; ?>>Dashboard</a></li>
-                    <li><a href="<?php echo e(BASE_URL); ?>generator.php" <?php echo (basename($_SERVER['PHP_SELF']) == 'generator.php') ? 'aria-current="page"' : ''; ?>>Gerador</a></li>
-                    <li><a href="<?php echo e(BASE_URL); ?>history.php" <?php echo (basename($_SERVER['PHP_SELF']) == 'history.php') ? 'aria-current="page"' : ''; ?>>Histórico</a></li>
-                    <li><a href="<?php echo e(BASE_URL); ?>profile.php" <?php echo (basename($_SERVER['PHP_SELF']) == 'profile.php') ? 'aria-current="page"' : ''; ?>>Perfil</a></li>
-                    <li><a href="<?php echo e(BASE_URL); ?>logout_handler.php" role="button" class="secondary outline">Sair</a></li> <!-- Usando logout_handler.php -->
-                <?php else: ?>
-                    <li><a href="<?php echo e(BASE_URL); ?>login.php" <?php echo (basename($_SERVER['PHP_SELF']) == 'login.php') ? 'aria-current="page"' : ''; ?>>Login</a></li>
-                    <li><a href="<?php echo e(BASE_URL); ?>register.php" <?php echo (basename($_SERVER['PHP_SELF']) == 'register.php') ? 'aria-current="page"' : ''; ?> role="button">Registrar-se</a></li>
-                <?php endif; ?>
-            </ul>
+<body class="d-flex flex-column min-vh-100">
+
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-light bg-white py-3">
+            <div class="container">
+                <a class="navbar-brand fw-bold" href="<?php echo e(BASE_URL); ?>index.php">
+                    <i class="bi bi-stars me-2" style="color: var(--bs-primary);"></i><?php echo e(SITE_NAME); ?>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNavDropdown">
+                    <ul class="navbar-nav ms-auto align-items-lg-center">
+                        <?php if (isset($_SESSION['user_id'])): ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo ($current_page_basename == 'dashboard.php') ? 'active fw-semibold' : ''; ?>" href="<?php echo e(BASE_URL); ?>dashboard.php">
+                                    <i class="bi bi-layout-wtf me-1"></i>Dashboard
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo ($current_page_basename == 'generator.php') ? 'active fw-semibold' : ''; ?>" href="<?php echo e(BASE_URL); ?>generator.php">
+                                    <i class="bi bi-magic me-1"></i>Gerador Prompt
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo ($current_page_basename == 'ebook_planner.php') ? 'active fw-semibold' : ''; ?>" href="<?php echo e(BASE_URL); ?>ebook_planner.php">
+                                    <i class="bi bi-journal-plus me-1"></i>Planner eBook
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo ($current_page_basename == 'history.php') ? 'active fw-semibold' : ''; ?>" href="<?php echo e(BASE_URL); ?>history.php">
+                                    <i class="bi bi-clock-history me-1"></i>Histórico
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle <?php echo ($current_page_basename == 'profile.php') ? 'active fw-semibold' : ''; ?>" href="#" id="navbarUserDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-person-circle me-1"></i><?php echo e($_SESSION['username'] ?? 'Usuário'); ?>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
+                                    <li>
+                                        <a class="dropdown-item <?php echo ($current_page_basename == 'profile.php') ? 'active' : ''; ?>" href="<?php echo e(BASE_URL); ?>profile.php">
+                                            <i class="bi bi-person-lines-fill me-2"></i>Meu Perfil
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item" href="<?php echo e(BASE_URL); ?>logout_handler.php">
+                                            <i class="bi bi-box-arrow-right me-2"></i>Sair
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        <?php else: ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo ($current_page_basename == 'login.php') ? 'active fw-semibold' : ''; ?>" href="<?php echo e(BASE_URL); ?>login.php">Login</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="btn btn-primary btn-sm ms-lg-2" href="<?php echo e(BASE_URL); ?>register.php" role="button">Registrar-se</a>
+                            </li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+            </div>
         </nav>
     </header>
-    <main class="container"> <!-- Container principal para o conteúdo da página -->
+
+    <main class="flex-shrink-0">
         <?php
-        // Exibir mensagens de feedback globais (não específicas de um formulário)
-        // Essas são mensagens que podem ser definidas por qualquer action antes de um redirect.
+        // Exibir mensagens de feedback globais
         if (isset($_SESSION['global_success_message'])) {
-            echo '<article class="success-message" style="background-color: var(--pico-color-green-100); color: var(--pico-color-green-700); border-left: 5px solid var(--pico-color-green-700); padding: 1rem;">' . e($_SESSION['global_success_message']) . '</article>';
+            echo '<div class="container pt-3"><div class="alert alert-success alert-dismissible fade show" role="alert">' .
+                 e($_SESSION['global_success_message']) .
+                 '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' .
+                 '</div></div>';
             unset($_SESSION['global_success_message']);
         }
         if (isset($_SESSION['global_error_message'])) {
-            echo '<article class="error-message" style="background-color: var(--pico-color-red-100); color: var(--pico-color-red-700); border-left: 5px solid var(--pico-color-red-700); padding: 1rem;">' . e($_SESSION['global_error_message']) . '</article>';
+            echo '<div class="container pt-3"><div class="alert alert-danger alert-dismissible fade show" role="alert">' .
+                 e($_SESSION['global_error_message']) .
+                 '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' .
+                 '</div></div>';
             unset($_SESSION['global_error_message']);
         }
-        // Nota: Mensagens específicas de formulários (como form_errors, form_data) devem ser tratadas nas próprias páginas dos formulários.
         ?>
+        <!-- O conteúdo específico da página (geralmente dentro de um <div class="container py-X">) virá APÓS esta tag <main> e ANTES do footer.php -->

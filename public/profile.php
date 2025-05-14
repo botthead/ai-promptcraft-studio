@@ -2,20 +2,15 @@
 // public/profile.php
 $page_title = "Meu Perfil e Configurações";
 
-// Ordem dos includes: auth primeiro para proteger a página
 require_once __DIR__ . '/../src/core/auth.php';
-require_login(); // Garante que apenas usuários logados acessem
+require_login();
 
-// Depois config e functions se necessário (header já os inclui)
-require_once __DIR__ . '/../src/config/database.php'; // $pdo
-// A função e() é definida no header ou functions.php
-// A função decrypt_data() será chamada apenas se necessário abaixo
-
-require_once __DIR__ . '/../src/templates/header.php'; // Inclui constants, session_start, e()
+require_once __DIR__ . '/../src/config/database.php'; 
+require_once __DIR__ . '/../src/templates/header.php';
 
 $user_id = $_SESSION['user_id'];
 $user_info = null;
-$gemini_api_key_status = "Não configurada";
+$gemini_api_key_status_html = "<span class='badge bg-warning text-dark'>Não configurada</span>"; // Padrão
 
 try {
     $stmt = $pdo->prepare("SELECT username, email, gemini_api_key_encrypted FROM users WHERE id = :user_id");
@@ -24,107 +19,128 @@ try {
     $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user_info && !empty($user_info['gemini_api_key_encrypted'])) {
-        // A função decrypt_data precisa estar disponível aqui se formos descriptografar
-        // Como incluímos functions.php no header (ou o header inclui constants.php que deve ser incluído antes de functions.php), está OK
-        // Por segurança, não exibimos a chave, apenas o status.
-        $gemini_api_key_status = "Configurada";
+        $gemini_api_key_status_html = "<span class='badge bg-success'><i class='bi bi-check-circle-fill me-1'></i>Configurada</span>";
     }
 
 } catch (PDOException $e) {
     error_log("PDOException ao carregar perfil do usuário {$user_id}: " . $e->getMessage());
-    $_SESSION['global_error_message'] = "Erro ao carregar informações do perfil.";
-    // A mensagem global será exibida pelo header.php
+    // A mensagem global de erro já é tratada no header.php
 }
-
 ?>
 
-<article>
-    <header>
-        <h2><?php echo e($page_title); ?></h2>
-    </header>
+<div class="container py-4"> 
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-8"> 
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="display-5 fw-bold mb-0">
+                    <i class="bi bi-person-badge me-2"></i><?php echo e($page_title); ?>
+                </h1>
+            </div>
 
-    <?php
-    // Mensagens de sucesso/erro específicas desta página (definidas por update_profile_action.php)
-    if (isset($_SESSION['profile_success_message'])) {
-        echo '<div class="notice success" style="background-color: var(--pico-form-element-background-color); border-left-color: var(--pico-color-green); margin-bottom: 1rem; padding: 0.75rem;"><p>' . e($_SESSION['profile_success_message']) . '</p></div>';
-        unset($_SESSION['profile_success_message']);
-    }
-    if (isset($_SESSION['profile_error_message'])) {
-        echo '<div class="notice error" style="background-color: var(--pico-form-element-background-color); border-left-color: var(--pico-color-red); margin-bottom: 1rem; padding: 0.75rem;"><p>' . e($_SESSION['profile_error_message']) . '</p></div>';
-        unset($_SESSION['profile_error_message']);
-    }
-    ?>
+            <?php
+            // Mensagens de feedback específicas do perfil já são tratadas pelas globais no header.php
+            // Se você tinha $_SESSION['profile_success_message'] etc., elas seriam pegas pelas globais.
+            ?>
 
-    <?php if ($user_info): ?>
-        <section id="account-info">
-            <h3>Informações da Conta</h3>
-            <p><strong>Nome de Usuário:</strong> <?php echo e($user_info['username']); ?></p>
-            <p><strong>Email:</strong> <?php echo e($user_info['email']); ?></p>
-        </section>
+            <?php if ($user_info): ?>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 fw-semibold"><i class="bi bi-person-vcard me-2"></i>Informações da Conta</h5>
+                            </div>
+                            <div class="card-body">
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-5">Nome de Usuário:</dt>
+                                    <dd class="col-sm-7"><?php echo e($user_info['username']); ?></dd>
+                                    <dt class="col-sm-5">Email:</dt>
+                                    <dd class="col-sm-7"><?php echo e($user_info['email']); ?></dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
 
-        <hr>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 fw-semibold"><i class="bi bi-key-fill me-2"></i>API do Google Gemini</h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="small text-muted">Sua chave API é usada para interagir com os modelos Gemini e é armazenada de forma criptografada.</p>
+                                <p>Status: <?php echo $gemini_api_key_status_html; ?></p>
+                                
+                                <form action="<?php echo e(BASE_URL); ?>../src/actions/update_profile_action.php" method="POST">
+                                    <input type="hidden" name="action" value="update_api_key">
+                                    <div class="mb-3">
+                                        <label for="gemini_api_key" class="form-label visually-hidden">Nova Chave API Gemini:</label>
+                                        <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key" 
+                                               placeholder="<?php echo ($user_info && !empty($user_info['gemini_api_key_encrypted'])) ? 'Nova chave (deixe em branco para manter)' : 'Insira sua chave API aqui'; ?>">
+                                        <?php if (isset($_SESSION['form_errors_profile']['gemini_api_key'])): ?>
+                                            <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors_profile']['gemini_api_key']); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-save me-1"></i>Salvar Chave</button>
+                                    <?php if ($user_info && !empty($user_info['gemini_api_key_encrypted'])): ?>
+                                        <button type="submit" name="action" value="remove_api_key" class="btn btn-outline-danger btn-sm ms-2"
+                                                onclick="return confirm('Tem certeza que deseja remover sua chave API do Gemini?');">
+                                            <i class="bi bi-trash me-1"></i>Remover
+                                        </button>
+                                    <?php endif; ?>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        <section id="api-key-config">
-            <h3>Configuração da API do Google Gemini</h3>
-            <p>Para utilizar funcionalidades que interagem diretamente com o Google Gemini, você precisará fornecer sua chave API.</p>
-            <p>Status atual da chave: <strong><?php echo e($gemini_api_key_status); ?></strong></p>
+                <div class="card shadow-sm mt-4">
+                     <div class="card-header bg-light">
+                        <h5 class="mb-0 fw-semibold"><i class="bi bi-shield-lock-fill me-2"></i>Alterar Senha</h5>
+                    </div>
+                    <div class="card-body">
+                         <form action="<?php echo e(BASE_URL); ?>../src/actions/update_profile_action.php" method="POST" novalidate>
+                            <input type="hidden" name="action" value="update_password">
+                            <div class="row g-3">
+                                <div class="col-md-12">
+                                    <label for="current_password" class="form-label">Senha Atual:</label>
+                                    <input type="password" class="form-control <?php echo isset($_SESSION['form_errors_profile']['current_password']) ? 'is-invalid' : ''; ?>" 
+                                           id="current_password" name="current_password" required>
+                                    <?php if (isset($_SESSION['form_errors_profile']['current_password'])): ?>
+                                        <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors_profile']['current_password']); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="new_password" class="form-label">Nova Senha:</label>
+                                    <input type="password" class="form-control <?php echo isset($_SESSION['form_errors_profile']['new_password']) ? 'is-invalid' : ''; ?>" 
+                                           id="new_password" name="new_password" required>
+                                    <div class="form-text small">Mínimo de 8 caracteres, letras e números.</div>
+                                    <?php if (isset($_SESSION['form_errors_profile']['new_password'])): ?>
+                                        <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors_profile']['new_password']); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="confirm_new_password" class="form-label">Confirmar Nova Senha:</label>
+                                    <input type="password" class="form-control <?php echo isset($_SESSION['form_errors_profile']['confirm_new_password']) ? 'is-invalid' : ''; ?>" 
+                                           id="confirm_new_password" name="confirm_new_password" required>
+                                    <?php if (isset($_SESSION['form_errors_profile']['confirm_new_password'])): ?>
+                                        <div class="error-feedback mt-1"><?php echo e($_SESSION['form_errors_profile']['confirm_new_password']); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-3"><i class="bi bi-key me-2"></i>Alterar Senha</button>
+                        </form>
+                    </div>
+                </div>
 
-            <form action="<?php echo e(BASE_URL); ?>../src/actions/update_profile_action.php" method="POST">
-                <input type="hidden" name="action" value="update_api_key">
-                
-                <label for="gemini_api_key">
-                    Sua Chave API do Gemini:
-                    <input type="password" id="gemini_api_key" name="gemini_api_key" 
-                           placeholder="<?php echo ($gemini_api_key_status == 'Configurada') ? 'Insira nova chave para atualizar (deixe em branco para manter)' : 'Insira sua chave API aqui'; ?>">
-                    <small>Sua chave será armazenada de forma criptografada. Se já houver uma chave configurada, inserir uma nova irá substituí-la. Deixe em branco para não alterar a chave existente.</small>
-                </label>
-                <?php if (isset($_SESSION['form_errors_profile']['gemini_api_key'])): ?>
-                    <small class="error-feedback" style="color: var(--pico-color-red-500);"><?php echo e($_SESSION['form_errors_profile']['gemini_api_key']); ?></small><br>
-                <?php endif; ?>
-
-                <button type="submit">Salvar Chave API</button>
-                <?php if ($gemini_api_key_status == 'Configurada'): ?>
-                    <button type="submit" name="action" value="remove_api_key" class="secondary outline" style="margin-left: 10px;"
-                            onclick="return confirm('Tem certeza que deseja remover sua chave API do Gemini?');">Remover Chave API</button>
-                <?php endif; ?>
-            </form>
-        </section>
-        
-        <hr>
-        <section id="change-password">
-            <h3>Alterar Senha</h3>
-             <form action="<?php echo e(BASE_URL); ?>../src/actions/update_profile_action.php" method="POST">
-                <input type="hidden" name="action" value="update_password">
-                
-                <label for="current_password">Senha Atual:</label>
-                <input type="password" id="current_password" name="current_password" required>
-                 <?php if (isset($_SESSION['form_errors_profile']['current_password'])): ?>
-                    <small class="error-feedback" style="color: var(--pico-color-red-500);"><?php echo e($_SESSION['form_errors_profile']['current_password']); ?></small><br>
-                <?php endif; ?>
-
-                <label for="new_password">Nova Senha:</label>
-                <input type="password" id="new_password" name="new_password" required>
-                <small>Mínimo de 8 caracteres, incluindo letras e números.</small><br>
-                 <?php if (isset($_SESSION['form_errors_profile']['new_password'])): ?>
-                    <small class="error-feedback" style="color: var(--pico-color-red-500);"><?php echo e($_SESSION['form_errors_profile']['new_password']); ?></small><br>
-                <?php endif; ?>
-
-                <label for="confirm_new_password">Confirmar Nova Senha:</label>
-                <input type="password" id="confirm_new_password" name="confirm_new_password" required>
-                 <?php if (isset($_SESSION['form_errors_profile']['confirm_new_password'])): ?>
-                    <small class="error-feedback" style="color: var(--pico-color-red-500);"><?php echo e($_SESSION['form_errors_profile']['confirm_new_password']); ?></small><br>
-                <?php endif; ?>
-                
-                <button type="submit">Alterar Senha</button>
-            </form>
-        </section>
-
-    <?php else: ?>
-        <p>Não foi possível carregar as informações do seu perfil. Por favor, tente recarregar a página ou entre em contato com o suporte se o problema persistir.</p>
-    <?php endif; ?>
-</article>
+            <?php else: ?>
+                <div class="alert alert-warning" role="alert">
+                    Não foi possível carregar as informações do seu perfil.
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
 
 <?php
-if (isset($_SESSION['form_errors_profile'])) unset($_SESSION['form_errors_profile']); // Limpa erros do formulário da sessão
+if (isset($_SESSION['form_errors_profile'])) unset($_SESSION['form_errors_profile']);
 require_once __DIR__ . '/../src/templates/footer.php';
 ?>
